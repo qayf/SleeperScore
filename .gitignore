@@ -1,0 +1,14 @@
+venv/
+cache/
+__pycache__/
+*.pyc
+
+# password hashes — never commit
+auth_store.json
+auth_store.json.lock
+*.lock
+.auth_*.tmp
+
+# local env / secrets
+.env
+.streamlit/secrets.toml

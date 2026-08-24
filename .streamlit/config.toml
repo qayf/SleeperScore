@@ -1,0 +1,57 @@
+# Palette lifted from sleeper.com: deep navy canvas, slightly raised panels,
+# mint-teal as the primary accent (active tabs, buttons, links), periwinkle
+# violet as the secondary action colour, and a hot coral for live/negative.
+[theme]
+base = "dark"
+
+# Canvas and surfaces
+backgroundColor = "#0D141F"           # main page — Sleeper's near-black navy
+secondaryBackgroundColor = "#1A2434"  # widgets, expanders, raised cards
+borderColor = "#243149"               # the faint outline around Sleeper's cards
+showWidgetBorder = true
+showSidebarBorder = true
+
+# Type
+textColor = "#E8EEF7"                 # near-white, a touch cool
+linkColor = "#14D8B4"
+linkUnderline = false
+
+# Accents
+primaryColor = "#00D2AA"              # Sleeper mint-teal: active tab, buttons, focus
+
+# Sleeper's shapes: softly rounded panels, fully-rounded pill buttons
+baseRadius = "0.7rem"
+buttonRadius = "full"
+
+# Semantic colours used by st.success / st.info / st.error banners
+greenColor = "#00D2AA"
+greenTextColor = "#5FF0D4"
+greenBackgroundColor = "#0E2E2C"
+
+blueColor = "#8B8BF7"                 # Sleeper's periwinkle (its "TRADE" button)
+blueTextColor = "#AFAFFB"
+blueBackgroundColor = "#1B1F3D"
+
+redColor = "#FF4D6A"                  # the LIVE indicator red
+redTextColor = "#FF8095"
+redBackgroundColor = "#331722"
+
+grayColor = "#8996AB"
+grayTextColor = "#8996AB"
+grayBackgroundColor = "#161F2E"
+
+# Tables read as panels, matching the league cards on sleeper.com
+dataframeHeaderBackgroundColor = "#141D2B"
+dataframeBorderColor = "#243149"
+
+codeBackgroundColor = "#111A27"
+codeTextColor = "#14D8B4"
+
+[theme.sidebar]
+backgroundColor = "#0A1017"           # Sleeper's sidebar sits darker than the page
+secondaryBackgroundColor = "#161F2E"
+borderColor = "#1C2739"
+textColor = "#E8EEF7"
+primaryColor = "#00D2AA"
+linkColor = "#14D8B4"
+buttonRadius = "full"

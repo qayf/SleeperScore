@@ -11,6 +11,17 @@ import sleeper_client as sc
 
 MAX_WEEK = 18  # sleeper "leg" ceiling for a regular NFL season+playoffs
 
+# Bump this whenever Asset / TradeSide / Trade change shape.
+#
+# app.py caches the analysis with @st.cache_resource, which keys only on the
+# cached function's own source and arguments — it does NOT notice edits to
+# this module. Without a version in the key, a deploy that changes these
+# dataclasses keeps serving objects built by the *previous* definition, and
+# the new render code blows up on the attribute that didn't exist yet.
+# That is exactly how adding Asset.meta produced an AttributeError in
+# production while working fine locally against a cold cache.
+SCHEMA_VERSION = 2
+
 
 @dataclass
 class Asset:

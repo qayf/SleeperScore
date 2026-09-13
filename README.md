@@ -88,6 +88,14 @@ Each trade is a collapsible card.
 `Asset` carries `name` and `meta` separately for this; `Asset.label` is a
 derived one-line form still used by the player search filter.
 
+> **If you change `Asset`, `TradeSide` or `Trade`, bump `SCHEMA_VERSION` in
+> `analysis.py`.** `load()` in app.py is cached with `@st.cache_resource`,
+> which keys only on that function's own source and arguments — it does not
+> notice edits to `analysis.py`. Without a version bump, a deploy keeps
+> serving objects built by the previous definitions and the new render code
+> raises `AttributeError` on the field that didn't exist yet. The version is
+> passed into `load()` purely so it lands in the cache key.
+
 ## Trade Calculator
 
 A third tab grades a **hypothetical** trade between any two teams in the

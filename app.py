@@ -1,4 +1,5 @@
 import datetime as dt
+import html
 import re
 import shutil
 
@@ -28,6 +29,70 @@ def seasons_to_offer() -> list[str]:
     current = int(state.get("season") or dt.date.today().year)
     return [str(s) for s in range(current, current - 4, -1)]
 
+
+esc = html.escape  # for raw-HTML contexts; md() below is for markdown contexts
+
+
+# Trade-history card styling. Colours mirror .streamlit/config.toml so the
+# hand-rolled cards sit in the same Sleeper palette as the themed widgets.
+TRADE_CARD_CSS = """
+<style>
+.th-card { padding: 2px 0 4px; }
+.th-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0 14px; font-size: 0.72rem; letter-spacing: 0.08em;
+}
+.th-status { display: inline-flex; align-items: center; gap: 8px;
+  color: #8B8BF7; font-weight: 700; }
+.th-dot { width: 7px; height: 7px; border-radius: 50%; background: #8B8BF7; }
+.th-card-when { color: #7E8CA0; letter-spacing: 0.02em; }
+
+.th-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+.th-side {
+  background: #141D2B; border: 1px solid #243149;
+  border-radius: 0.7rem; padding: 16px 16px 14px;
+}
+.th-side-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; border-bottom: 1px solid #223047; padding-bottom: 12px; margin-bottom: 12px;
+}
+.th-side-name { font-size: 1.02rem; font-weight: 700; color: #E8EEF7; line-height: 1.25; }
+.th-side-mgr { font-size: 0.78rem; color: #7E8CA0; margin-top: 3px; }
+.th-crown { font-size: 0.9rem; }
+
+.th-pill {
+  flex: none; padding: 5px 11px; border-radius: 999px;
+  font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.th-pill-pos { background: rgba(0,210,170,0.16); color: #3BE8C6; }
+.th-pill-neg { background: rgba(255,77,106,0.16); color: #FF8095; }
+.th-pill-zero { background: rgba(126,140,160,0.14); color: #A7B4C6; }
+
+.th-sec {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em;
+  margin: 12px 0 8px;
+}
+.th-sec:first-of-type { margin-top: 0; }
+.th-sec-recv { color: #00D2AA; }
+.th-sec-sent { color: #FF4D6A; }
+
+.th-asset { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 9px; }
+.th-badge {
+  flex: none; width: 22px; height: 22px; border-radius: 7px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700; line-height: 1;
+}
+.th-badge-recv { background: rgba(0,210,170,0.16); color: #3BE8C6; }
+.th-badge-sent { background: rgba(255,77,106,0.16); color: #FF8095; }
+.th-asset-text { display: flex; flex-direction: column; min-width: 0; }
+.th-asset-name { font-size: 0.9rem; font-weight: 600; color: #E8EEF7; line-height: 1.3; }
+.th-asset-sub { font-size: 0.75rem; color: #7E8CA0; margin-top: 1px; }
+.th-empty { color: #55637A; font-size: 0.85rem; margin-bottom: 9px; }
+</style>
+"""
 
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]$~|<>])")
 
@@ -265,40 +330,72 @@ with tab_trades:
         if (team_filter or week_filter or player_filter) and not filtered:
             st.info("No trades match these filters.")
 
+        st.markdown(TRADE_CARD_CSS, unsafe_allow_html=True)
+
+        def _pill(net: float) -> str:
+            tone = "zero" if abs(net) < 1e-9 else ("pos" if net > 0 else "neg")
+            return f'<span class="th-pill th-pill-{tone}">{net:+.2f}</span>'
+
+        def _asset_row(a, direction: str) -> str:
+            sign = "+" if direction == "recv" else "−"
+            sub = " · ".join(bit for bit in (esc(a.meta), f"{a.points:+.2f} pts") if bit)
+            return (
+                f'<div class="th-asset">'
+                f'<span class="th-badge th-badge-{direction}">{sign}</span>'
+                f'<span class="th-asset-text">'
+                f'<span class="th-asset-name">{esc(a.name)}</span>'
+                f'<span class="th-asset-sub">{sub}</span>'
+                f"</span></div>"
+            )
+
+        def _side_panel(s, is_winner: bool) -> str:
+            crown = ' <span class="th-crown">\U0001F451</span>' if is_winner else ""
+            out = [
+                '<div class="th-side">',
+                '<div class="th-side-head"><div>',
+                f'<div class="th-side-name">{esc(s.team_name)}{crown}</div>',
+                f'<div class="th-side-mgr">{esc(s.manager)}</div>',
+                f"</div>{_pill(s.net)}</div>",
+            ]
+            for direction, assets in (("recv", s.received), ("sent", s.sent)):
+                word = "RECEIVED" if direction == "recv" else "SENT"
+                out.append(f'<div class="th-sec th-sec-{direction}">{word} · {len(assets)}</div>')
+                if assets:
+                    out += [_asset_row(a, direction) for a in assets]
+                else:
+                    out.append('<div class="th-empty">—</div>')
+            out.append("</div>")
+            return "".join(out)
+
         for t in sorted(filtered, key=lambda t: t.created, reverse=True):
-            when = dt.datetime.fromtimestamp(t.created / 1000).strftime("%Y-%m-%d %H:%M")
+            stamp = dt.datetime.fromtimestamp(t.created / 1000)
             winner = t.winner
-            headline_bits = []
-            for s in t.sides:
-                tag = " \U0001F451" if winner and s.roster_id == winner.roster_id else ""
-                headline_bits.append(f"{md(s.team_name)}{tag} ({s.net:+.2f})")
-            headline = " ↔️ ".join(headline_bits)
+            teams = " ↔ ".join(md(s.team_name) for s in t.sides)
+            verdict = (
+                f"\U0001F451 Current winner: {md(winner.team_name)}"
+                if winner
+                else "Even so far — no points separate these sides yet"
+            )
+            label = (
+                f"Week {t.week:02d} · {stamp.strftime('%b %d, %Y · %H:%M')} · "
+                f"{teams} — {verdict}"
+            )
 
-            with st.expander(f"Week {t.week} · {when} — {headline}"):
-                cols = st.columns(len(t.sides))
-                for col, s in zip(cols, t.sides):
-                    with col:
-                        crown = " \U0001F451" if winner and s.roster_id == winner.roster_id else ""
-                        st.markdown(f"**{md(s.team_name)}{crown}**")
-                        st.caption(md(s.manager))
-
-                        st.markdown("Received:")
-                        if s.received:
-                            for a in s.received:
-                                extra = f" — {a.detail}" if a.detail else ""
-                                st.write(f"➕ {md(a.label)}: **{a.points:+.2f} pts**{extra}")
-                        else:
-                            st.write("—")
-
-                        st.markdown("Sent:")
-                        if s.sent:
-                            for a in s.sent:
-                                extra = f" — {a.detail}" if a.detail else ""
-                                st.write(f"➖ {md(a.label)}: **{a.points:+.2f} pts**{extra}")
-                        else:
-                            st.write("—")
-
-                        st.metric("Net", f"{s.net:+.2f}")
+            with st.expander(label):
+                panels = "".join(
+                    _side_panel(s, bool(winner) and s.roster_id == winner.roster_id)
+                    for s in t.sides
+                )
+                st.markdown(
+                    '<div class="th-card">'
+                    '<div class="th-card-head">'
+                    '<span class="th-status"><span class="th-dot"></span>COMPLETED</span>'
+                    f'<span class="th-card-when">{esc(stamp.strftime("%b %d · %H:%M"))}</span>'
+                    "</div>"
+                    f'<div class="th-grid">{panels}</div>'
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 @st.cache_resource(show_spinner=False)

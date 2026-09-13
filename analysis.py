@@ -15,10 +15,21 @@ MAX_WEEK = 18  # sleeper "leg" ceiling for a regular NFL season+playoffs
 @dataclass
 class Asset:
     kind: str  # "player" | "pick"
-    label: str  # display name
+    name: str  # headline, e.g. "Cam Skattebo" / "2029 Round 1 pick"
     player_id: str | None  # underlying scorable player, if any (pick may resolve to one)
     points: float
-    detail: str = ""  # e.g. "2027 Round 1 pick -> drafted Ashton Jeanty" or "unresolved"
+    meta: str = ""  # muted subline, e.g. "RB · NYG" / "Original team · Lover Boys"
+    detail: str = ""  # e.g. "-> drafted Ashton Jeanty" or "not yet drafted"
+
+    @property
+    def label(self) -> str:
+        """Flat one-line form, still used for text search in the filters."""
+        bits = [self.name]
+        if self.meta:
+            bits.append(self.meta)
+        if self.detail:
+            bits.append(self.detail)
+        return " · ".join(bits)
 
 
 @dataclass
@@ -174,6 +185,23 @@ class LeagueData:
         team = p.get("team") or "FA"
         return f"{name} ({pos}-{team})" if pos else name
 
+    def player_bare_name(self, player_id: str) -> str:
+        """Just the name — no position/team suffix."""
+        p = self.players.get(player_id)
+        if not p:
+            return f"Player {player_id}"
+        return (
+            p.get("full_name")
+            or f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+            or f"Player {player_id}"
+        )
+
+    def player_meta(self, player_id: str) -> str:
+        """'RB · NYG' — the muted line under a player's name."""
+        p = self.players.get(player_id) or {}
+        bits = [b for b in (p.get("position"), p.get("team") or "FA") if b]
+        return " · ".join(bits)
+
     # ---------- points ----------
 
     def _week_stats(self, week: int) -> dict:
@@ -239,13 +267,15 @@ class LeagueData:
         return self._draft_index().get((season, round_, original_roster_id))
 
     def pick_asset(self, season: str, round_: int, original_roster_id: int, trade_week: int) -> Asset:
-        label = f"{season} Round {round_} pick (orig. {self.team_name(original_roster_id)})"
+        name = f"{season} Round {round_} pick"
+        origin = f"Original team · {self.team_name(original_roster_id)}"
         resolved = self.resolve_pick(season, round_, original_roster_id)
         if not resolved:
-            return Asset(kind="pick", label=label, player_id=None, points=0.0, detail="not yet drafted")
+            return Asset(kind="pick", name=name, player_id=None, points=0.0,
+                         meta="Not yet drafted", detail="not yet drafted")
 
         pid = resolved["player_id"]
-        pname = self.player_name(pid)
+        pname = self.player_bare_name(pid)
         if season != self.season:
             # drafted in a season we don't have stats context for (shouldn't
             # normally happen for a single league_id, kept as a safe fallback)
@@ -255,7 +285,8 @@ class LeagueData:
             end_week = self.current_scoreable_week()
             pts = self.player_points_since(pid, 1, end_week)
             detail = f"-> drafted {pname}"
-        return Asset(kind="pick", label=label, player_id=pid, points=pts, detail=detail)
+        return Asset(kind="pick", name=name, player_id=pid, points=pts,
+                     meta=f"{origin} · became {pname}", detail=detail)
 
     # ---------- trades ----------
 
@@ -287,17 +318,23 @@ class LeagueData:
             for rid in roster_ids
         }
 
-        for player_id, to_roster in adds.items():
+        def _player_asset(player_id: str) -> Asset:
             pts = self.player_points_since(player_id, week, self.current_scoreable_week())
-            asset = Asset(kind="player", label=self.player_name(player_id), player_id=player_id, points=pts)
+            return Asset(
+                kind="player",
+                name=self.player_bare_name(player_id),
+                player_id=player_id,
+                points=pts,
+                meta=self.player_meta(player_id),
+            )
+
+        for player_id, to_roster in adds.items():
             if to_roster in sides:
-                sides[to_roster].received.append(asset)
+                sides[to_roster].received.append(_player_asset(player_id))
 
         for player_id, from_roster in drops.items():
-            pts = self.player_points_since(player_id, week, self.current_scoreable_week())
-            asset = Asset(kind="player", label=self.player_name(player_id), player_id=player_id, points=pts)
             if from_roster in sides:
-                sides[from_roster].sent.append(asset)
+                sides[from_roster].sent.append(_player_asset(player_id))
 
         for dp in draft_picks:
             season = dp["season"]
@@ -311,8 +348,8 @@ class LeagueData:
             if prev_owner in sides:
                 # separate Asset instance so points aren't accidentally shared/mutated
                 sides[prev_owner].sent.append(
-                    Asset(kind="pick", label=asset.label, player_id=asset.player_id,
-                          points=asset.points, detail=asset.detail)
+                    Asset(kind="pick", name=asset.name, player_id=asset.player_id,
+                          points=asset.points, meta=asset.meta, detail=asset.detail)
                 )
 
         return Trade(

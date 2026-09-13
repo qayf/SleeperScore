@@ -69,6 +69,25 @@ the config, a hot reload won't pick them up.
   best trader → worst. Every roster appears, including ones that have never
   traded (they sit at 0).
 
+## Trade History
+
+Each trade is a collapsible card.
+
+- **Collapsed** shows week, date, the teams involved, and the verdict as
+  *"👑 Current winner: &lt;team&gt;"* — not raw net numbers. Trades where no
+  points separate the sides yet read *"Even so far"*.
+- **Expanded** gives one panel per team (a CSS grid, so 2- and 3-team trades
+  both lay out cleanly): team name with a crown if it's currently winning,
+  manager beneath, and a net pill — mint when positive, coral when negative,
+  grey at exactly zero.
+- Inside each panel, `RECEIVED` and `SENT` sections list every asset with a
+  +/− badge, the name on top and a muted line beneath carrying position and
+  team (`WR · LAR`) or pick origin (`Not yet drafted`), plus the points that
+  asset has scored since the trade.
+
+`Asset` carries `name` and `meta` separately for this; `Asset.label` is a
+derived one-line form still used by the player search filter.
+
 ## Trade Calculator
 
 A third tab grades a **hypothetical** trade between any two teams in the

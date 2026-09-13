@@ -8,7 +8,7 @@ import streamlit as st
 
 
 import sleeper_client as sc
-from analysis import LeagueData, MAX_WEEK
+from analysis import SCHEMA_VERSION, LeagueData, MAX_WEEK
 from ktc import KTCValues
 from proposal import SideValuation, ValuedAsset, evaluate
 
@@ -16,7 +16,11 @@ st.set_page_config(page_title="Sleeper Trade Analyzer", page_icon="\U0001F3C8", 
 
 
 @st.cache_resource(show_spinner=False, ttl=300)
-def load(league_id: str):
+def load(league_id: str, schema_version: int):
+    """`schema_version` is unused in the body on purpose: it exists so the
+    cache key changes when analysis.py's dataclasses do. Streamlit hashes
+    this function's own source and its arguments, and would otherwise hand
+    freshly-deployed render code objects built by the old definitions."""
     ld = LeagueData(league_id)
     trades = ld.all_trades()
     board = ld.leaderboard(trades)
@@ -232,7 +236,7 @@ with st.sidebar:
 
 with st.spinner("Pulling league data, transactions, and weekly stats from Sleeper..."):
     try:
-        ld, trades, board = load(st.session_state["league_id"])
+        ld, trades, board = load(st.session_state["league_id"], SCHEMA_VERSION)
     except Exception as e:
         st.error(f"Couldn't load league {st.session_state['league_id']!r}: {e}")
         if st.button("Back to my leagues"):
